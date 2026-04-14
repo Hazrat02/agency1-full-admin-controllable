@@ -1,9 +1,28 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useSiteStore } from '../stores/site'
 
 const route = useRoute()
-const currentPage = computed(() => route.meta.page ?? 'home')
+const siteStore = useSiteStore()
+const socialLinks = computed(() => siteStore.activeSocialLinks.slice(0, 4))
+const logoUrl = computed(() => siteStore.logoUrl || 'https://html.awaikenthemes.com/artistic/images/logo.svg')
+const navigationLinks = computed(() => siteStore.activeSidebarLinks)
+
+function isInternalLink(url) {
+  return typeof url === 'string' && /^\/(?!\/)/.test(url)
+}
+
+function isLinkActive(url) {
+  if (!isInternalLink(url)) {
+    return false
+  }
+
+  const normalizedUrl = url.replace(/\/+$/, '') || '/'
+  const normalizedPath = route.path.replace(/\/+$/, '') || '/'
+
+  return normalizedPath === normalizedUrl
+}
 </script>
 
 <template>
@@ -12,33 +31,42 @@ const currentPage = computed(() => route.meta.page ?? 'home')
       <nav class="navbar navbar-expand-lg">
         <div class="container">
           <RouterLink class="navbar-brand" to="/">
-            <img src="https://html.awaikenthemes.com/artistic/images/logo.svg" alt="Logo">
+            <img style="width: 200px;" :src="logoUrl" :alt="siteStore.siteName">
           </RouterLink>
 
           <div class="collapse navbar-collapse main-menu">
             <div class="nav-menu-wrapper">
               <ul class="navbar-nav mr-auto" id="menu">
-                <li class="nav-item">
-                  <RouterLink class="nav-link" :class="{ active: currentPage === 'home' }" to="/">Home</RouterLink>
-                </li>
-                <li class="nav-item">
-                  <RouterLink class="nav-link" :class="{ active: currentPage === 'about' }" to="/about">About Us</RouterLink>
-                </li>
-                <li class="nav-item">
-                  <RouterLink class="nav-link" :class="{ active: currentPage === 'services' }" to="/services">Services</RouterLink>
-                </li>
-                <li class="nav-item">
-                  <RouterLink class="nav-link" :class="{ active: currentPage === 'contact' }" to="/contact">Contact Us</RouterLink>
+                <li v-for="link in navigationLinks" :key="`header-link-${link.label}-${link.sort_order}`" class="nav-item">
+                  <RouterLink
+                    v-if="isInternalLink(link.url)"
+                    class="nav-link"
+                    :class="{ active: isLinkActive(link.url) }"
+                    :to="link.url"
+                  >
+                    {{ link.label }}
+                  </RouterLink>
+                  <a
+                    v-else
+                    class="nav-link"
+                    :href="link.url"
+                    :target="/^https?:\/\//i.test(link.url) ? '_blank' : null"
+                    :rel="/^https?:\/\//i.test(link.url) ? 'noopener noreferrer' : null"
+                  >
+                    {{ link.label }}
+                  </a>
                 </li>
               </ul>
             </div>
 
             <div class="header-social-box d-inline-flex">
-              <div class="header-social-links">
+              <div v-if="socialLinks.length" class="header-social-links">
                 <ul>
-                  <li><a href="#"><i class="fa-brands fa-x-twitter"></i></a></li>
-                  <li><a href="#"><i class="fa-brands fa-facebook-f"></i></a></li>
-                  <li><a href="#"><i class="fa-brands fa-instagram"></i></a></li>
+                  <li v-for="link in socialLinks" :key="`header-social-${link.name}-${link.sort_order}`">
+                    <a :href="link.url" target="_blank" rel="noopener noreferrer" :aria-label="link.name">
+                      <i :class="link.icon"></i>
+                    </a>
+                  </li>
                 </ul>
               </div>
 
@@ -57,7 +85,7 @@ const currentPage = computed(() => route.meta.page ?? 'home')
                       </div>
                       <div class="header-contact-box-content">
                         <h3>phone</h3>
-                        <p>(309) 8855-314</p>
+                        <p>{{ siteStore.phone || '-' }}</p>
                       </div>
                     </div>
 
@@ -67,7 +95,7 @@ const currentPage = computed(() => route.meta.page ?? 'home')
                       </div>
                       <div class="header-contact-box-content">
                         <h3>email</h3>
-                        <p>info@domainname.com</p>
+                        <p>{{ siteStore.email || '-' }}</p>
                       </div>
                     </div>
 
@@ -77,16 +105,18 @@ const currentPage = computed(() => route.meta.page ?? 'home')
                       </div>
                       <div class="header-contact-box-content">
                         <h3>address</h3>
-                        <p>123 Creative Lane London, SW1A 1AA United Kingdom</p>
+                        <p>{{ siteStore.address || '-' }}</p>
                       </div>
                     </div>
 
-                    <div class="header-social-links sidebar-social-links">
+                    <div v-if="socialLinks.length" class="header-social-links sidebar-social-links">
                       <h3>stay connected</h3>
                       <ul>
-                        <li><a href="#"><i class="fa-brands fa-x-twitter"></i></a></li>
-                        <li><a href="#"><i class="fa-brands fa-facebook-f"></i></a></li>
-                        <li><a href="#"><i class="fa-brands fa-instagram"></i></a></li>
+                        <li v-for="link in socialLinks" :key="`sidebar-social-${link.name}-${link.sort_order}`">
+                          <a :href="link.url" target="_blank" rel="noopener noreferrer" :aria-label="link.name">
+                            <i :class="link.icon"></i>
+                          </a>
+                        </li>
                       </ul>
                     </div>
                   </div>

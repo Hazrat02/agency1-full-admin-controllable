@@ -1,7 +1,8 @@
 const scripts = [
   { id: 'legacy-function-js', src: '/js/function.js' },
-  { id: 'legacy-theme-panel-js', src: '/js/theme-panel.js' },
 ]
+
+let activeInitialization = Promise.resolve()
 
 function loadScript({ id, src }) {
   return new Promise((resolve, reject) => {
@@ -19,19 +20,49 @@ function loadScript({ id, src }) {
   })
 }
 
+function waitForFrames(count = 1) {
+  return new Promise((resolve) => {
+    const step = () => {
+      if (count <= 0) {
+        resolve()
+        return
+      }
+
+      count -= 1
+      window.requestAnimationFrame(step)
+    }
+
+    window.requestAnimationFrame(step)
+  })
+}
+
 export async function initTemplateScripts() {
-  if (window.jQuery) {
-    window.jQuery('.slicknav_menu').remove()
-    window.jQuery('.cb-cursor').remove()
-    window.jQuery('.offcanvas-backdrop').remove()
-    window.jQuery('.responsive-menu').empty()
-    window.jQuery('.navbar-toggle').empty()
-  }
+  activeInitialization = activeInitialization
+    .catch(() => {})
+    .then(async () => {
+      await waitForFrames(2)
 
-  document.body.style.removeProperty('overflow')
-  document.body.style.removeProperty('padding-right')
+      if (window.jQuery) {
+        window.jQuery('.slicknav_menu').remove()
+        window.jQuery('.cb-cursor').remove()
+        window.jQuery('.offcanvas-backdrop').remove()
+        window.jQuery('.responsive-menu').empty()
+        window.jQuery('.navbar-toggle').empty()
+      }
 
-  for (const script of scripts) {
-    await loadScript(script)
-  }
+      document.body.style.removeProperty('overflow')
+      document.body.style.removeProperty('padding-right')
+
+      for (const script of scripts) {
+        await loadScript(script)
+      }
+
+      await waitForFrames(2)
+
+      if (window.ScrollTrigger?.refresh) {
+        window.ScrollTrigger.refresh()
+      }
+    })
+
+  return activeInitialization
 }

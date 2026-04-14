@@ -1,3 +1,16 @@
+<script setup>
+import { computed } from 'vue'
+import { useSiteStore } from '../stores/site'
+
+const siteStore = useSiteStore()
+const logoUrl = computed(() => siteStore.logoUrl || 'https://html.awaikenthemes.com/artistic/images/footer-logo.svg')
+const quickLinks = computed(() => siteStore.activeSidebarLinks.slice(0, 4))
+
+function isInternalLink(url) {
+  return typeof url === 'string' && /^\/(?!\/)/.test(url)
+}
+</script>
+
 <template>
   <footer class="main-footer">
     <div class="footer-work-together">
@@ -28,7 +41,7 @@
           <div class="col-lg-4 col-md-6">
             <div class="about-footer">
               <div class="footer-logo">
-                <img src="https://html.awaikenthemes.com/artistic/images/footer-logo.svg" alt="Footer logo">
+                <img :src="logoUrl" :alt="siteStore.siteName">
               </div>
 
               <div class="footer-contact-box">
@@ -37,7 +50,7 @@
                     <img src="https://html.awaikenthemes.com/artistic/images/icon-phone.svg" alt="Phone icon">
                   </div>
                   <div class="footer-contact-content">
-                    <p>(309) 8855-314</p>
+                    <p>{{ siteStore.phone || '-' }}</p>
                   </div>
                 </div>
 
@@ -46,7 +59,7 @@
                     <img src="https://html.awaikenthemes.com/artistic/images/icon-mail.svg" alt="Mail icon">
                   </div>
                   <div class="footer-contact-content">
-                    <p>info@domainname.com</p>
+                    <p>{{ siteStore.email || '-' }}</p>
                   </div>
                 </div>
               </div>
@@ -57,10 +70,10 @@
             <div class="footer-links">
               <h3>quick link</h3>
               <ul>
-                <li><RouterLink to="/">Home</RouterLink></li>
-                <li><RouterLink to="/about">About Us</RouterLink></li>
-                <li><RouterLink to="/services">Services</RouterLink></li>
-                <li><RouterLink to="/contact">Contact</RouterLink></li>
+                <li v-for="link in quickLinks" :key="`footer-link-${link.label}-${link.sort_order}`">
+                  <RouterLink v-if="isInternalLink(link.url)" :to="link.url">{{ link.label }}</RouterLink>
+                  <a v-else :href="link.url" :target="/^https?:\/\//i.test(link.url) ? '_blank' : null" :rel="/^https?:\/\//i.test(link.url) ? 'noopener noreferrer' : null">{{ link.label }}</a>
+                </li>
               </ul>
             </div>
           </div>
@@ -88,12 +101,13 @@
               </form>
             </div>
 
-            <div class="footer-social-links">
+            <div v-if="siteStore.activeSocialLinks.length" class="footer-social-links">
               <ul>
-                <li><a href="#"><i class="fa-brands fa-pinterest-p"></i></a></li>
-                <li><a href="#"><i class="fa-brands fa-x-twitter"></i></a></li>
-                <li><a href="#"><i class="fa-brands fa-facebook-f"></i></a></li>
-                <li><a href="#"><i class="fa-brands fa-instagram"></i></a></li>
+                <li v-for="link in siteStore.activeSocialLinks" :key="`footer-social-${link.name}-${link.sort_order}`">
+                  <a :href="link.url" target="_blank" rel="noopener noreferrer" :aria-label="link.name">
+                    <i :class="link.icon"></i>
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
@@ -103,7 +117,7 @@
           <div class="row align-items-center">
             <div class="col-lg-12">
               <div class="footer-copyright-text">
-                <p>Copyright © 2024 All Rights Reserved.</p>
+                <p>Copyright Â© 2024 All Rights Reserved.</p>
               </div>
             </div>
           </div>
@@ -112,4 +126,3 @@
     </div>
   </footer>
 </template>
-

@@ -369,7 +369,7 @@ body{
 }
 
 .section-title h1{
-	font-size: 120px;
+	font-size: 80px;
 	font-weight: 300;
 	line-height: 1.2em;
 	color: var(--primary-color);

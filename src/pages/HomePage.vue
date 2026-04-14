@@ -1,3 +1,360 @@
+<script setup>
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { resolveAssetUrl } from '../config/api'
+import { useSiteStore } from '../stores/site'
+
+function normalizeCategory(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function getCounterMeta(value) {
+  const normalized = String(value ?? '').trim()
+  const numeric = normalized.replace(/[^0-9.]/g, '')
+  const hasDecimal = numeric.includes('.')
+  const decimals = hasDecimal ? Math.max((numeric.split('.')[1] || '').length, 0) : 0
+  const target = Number.parseFloat(numeric || '0')
+
+  return {
+    target: Number.isFinite(target) ? target : 0,
+    decimals,
+  }
+}
+
+function formatCounterValue(value, decimals) {
+  if (!Number.isFinite(value)) {
+    return '0'
+  }
+
+  if (decimals > 0) {
+    return value.toFixed(decimals)
+  }
+
+  return String(Math.round(value))
+}
+
+const siteStore = useSiteStore()
+const aboutContent = computed(() => siteStore.about ?? {})
+const homeFeaturesContent = computed(() => siteStore.homeFeatures ?? {})
+const homeServicesContent = computed(() => siteStore.homeServicesContent ?? {})
+const projectsContent = computed(() => siteStore.projects ?? {})
+const servicesPageContent = computed(() => siteStore.servicesPageContent ?? {})
+const testimonialContent = computed(() => siteStore.testimonial ?? {})
+const whoWeAreContent = computed(() => siteStore.whoWeAre ?? {})
+const whyChooseUsContent = computed(() => siteStore.whyChooseUs ?? {})
+const workingProcessContent = computed(() => siteStore.workingProcess ?? {})
+const whoWeAreSection = ref(null)
+const animatedWhoWeAreValues = ref([])
+let whoWeAreObserver = null
+let whoWeAreAnimationFrame = null
+let whoWeAreAnimated = false
+
+const heroBanner = computed(() => siteStore.primaryHomeBanner ?? {})
+const typedTitles = computed(() => {
+  const values = heroBanner.value?.typed_titles
+  return Array.isArray(values) && values.length ? values : ['Digital World', 'Social Marketing', 'Art & Design']
+})
+const headingPrefix = computed(() => heroBanner.value?.heading_prefix || 'Innovative solutions for')
+const heroDescription = computed(
+  () =>
+    heroBanner.value?.description ||
+    'At our Creative Digital Agency, we bring your ideas to life by crafting engaging, impactful digital experiences that captivate audiences and drive results. From innovative web design to compelling content and cutting-edge digital strategies.',
+)
+const heroButtonText = computed(() => heroBanner.value?.button_text || 'get in touch')
+const heroButtonUrl = computed(() => heroBanner.value?.button_url || '/contact')
+const backgroundVideoUrl = computed(
+  () => heroBanner.value?.background_video_url || 'https://demo.awaikenthemes.com/assets/videos/artistic-video.mp4',
+)
+const popupVideoUrl = computed(
+  () => heroBanner.value?.popup_video_url || 'https://www.youtube.com/watch?v=Y-x0efG1seA',
+)
+const circleImageUrl = computed(
+  () => heroBanner.value?.circle_image_url || 'https://html.awaikenthemes.com/artistic/images/learn-more-circle.svg',
+)
+const aboutAgencyTitleParts = computed(() => {
+  const parts = String(aboutContent.value?.agency_title || 'Crafting|unique digital|experiences that elevate your brand').split('|')
+  return {
+    before: parts[0] || '',
+    highlight: parts[1] || '',
+    after: parts[2] || '',
+  }
+})
+const aboutAgencyItems = computed(() => {
+  const items = aboutContent.value?.agency_items
+
+  if (Array.isArray(items) && items.length) {
+    return items
+  }
+
+  return [
+    {
+      icon_url: 'https://html.awaikenthemes.com/artistic/images/icon-about-agency-1.svg',
+      title: 'your success, our mission',
+      description: 'We measure our success by the success of our clients. With a focus on results and a dedication to quality, our mission is to deliver digital solutions that make a real impact.',
+    },
+    {
+      icon_url: 'https://html.awaikenthemes.com/artistic/images/icon-about-agency-2.svg',
+      title: 'creators of digital excellence',
+      description: 'At the core of our agency is a commitment to excellence and creativity. We specialize in crafting digital solutions that not only meet your needs but also elevate your brand.',
+    },
+    {
+      icon_url: 'https://html.awaikenthemes.com/artistic/images/icon-about-agency-3.svg',
+      title: 'innovating the digital landscape',
+      description: 'Founded on a passion for creativity and technology, we are a team of dedicated digital experts committed to transforming the way brands connect with audiences.',
+    },
+    {
+      icon_url: 'https://html.awaikenthemes.com/artistic/images/icon-about-agency-4.svg',
+      title: 'helping brands thrive online',
+      description: "Our purpose is simple: to help brands succeed in the digital age. We're passionate about building strong relationships with our clients and crafting custom strategies that drive results.",
+    },
+  ]
+})
+const homeServices = computed(() => {
+  const items = servicesPageContent.value?.items
+
+  if (Array.isArray(items) && items.length) {
+    return [...items]
+      .filter((item) => (item?.status ?? 'Active') === 'Active')
+      .filter((item) => item?.show_on_home)
+      .sort((first, second) => (first?.sort_order ?? 0) - (second?.sort_order ?? 0))
+      .slice(0, 3)
+  }
+
+  return []
+})
+const homeProjects = computed(() => siteStore.homeProjects ?? [])
+const homeProjectCategories = computed(() => {
+  const mapped = homeProjects.value
+    .map((item) => item?.category)
+    .filter(Boolean)
+    .map((label) => ({
+      label,
+      className: normalizeCategory(label),
+    }))
+
+  return mapped.filter((item, index, list) => list.findIndex((entry) => entry.className === item.className) === index)
+})
+const homeProjectsSection = computed(() => projectsContent.value?.section ?? {})
+const whoWeAreCounters = computed(() => {
+  const items = whoWeAreContent.value?.items
+
+  if (Array.isArray(items) && items.length) {
+    return items.slice(0, 4)
+  }
+
+  return [
+    {
+      icon_url: 'https://html.awaikenthemes.com/artistic/images/icon-who-we-are-counter-1.svg',
+      value: '35',
+      suffix: 'k+',
+      label: 'Happy Customer Around the Word',
+    },
+    {
+      icon_url: 'https://html.awaikenthemes.com/artistic/images/icon-who-we-are-counter-3.svg',
+      value: '250',
+      suffix: '+',
+      label: 'trusted best partners and sponsers',
+    },
+    {
+      icon_url: 'https://html.awaikenthemes.com/artistic/images/icon-who-we-are-counter-2.svg',
+      value: '120',
+      suffix: '+',
+      label: 'best client support award achieved',
+    },
+    {
+      icon_url: 'https://html.awaikenthemes.com/artistic/images/icon-who-we-are-counter-4.svg',
+      value: '5',
+      suffix: 'k+',
+      label: 'active users using our best services',
+    },
+  ]
+})
+const whoWeAreTopCounters = computed(() => whoWeAreCounters.value.slice(0, 2))
+const whoWeAreBottomCounters = computed(() => whoWeAreCounters.value.slice(2, 4))
+const whoWeAreReviewImages = computed(() => {
+  const images = whoWeAreContent.value?.review_images
+
+  if (Array.isArray(images) && images.length) {
+    return images.filter(Boolean).slice(0, 5)
+  }
+
+  return testimonialReviewImages.value.slice(0, 5)
+})
+const displayWhoWeAreCounters = computed(() =>
+  whoWeAreCounters.value.map((item, index) => {
+    const meta = getCounterMeta(item?.value)
+    const currentValue = animatedWhoWeAreValues.value[index] ?? 0
+
+    return {
+      ...item,
+      displayValue: formatCounterValue(currentValue, meta.decimals),
+    }
+  }),
+)
+const displayWhoWeAreTopCounters = computed(() => displayWhoWeAreCounters.value.slice(0, 2))
+const displayWhoWeAreBottomCounters = computed(() => displayWhoWeAreCounters.value.slice(2, 4))
+const homeFeatureItems = computed(() => {
+  const items = homeFeaturesContent.value?.items
+
+  if (Array.isArray(items) && items.length) {
+    return items.slice(0, 2)
+  }
+
+  return [
+    {
+      image_url: 'https://html.awaikenthemes.com/artistic/images/digital-features-img-1.jpg',
+      title: 'custom branding solutions',
+      description: 'Unique brand identity development, including logos, color palettes.',
+    },
+    {
+      image_url: 'https://html.awaikenthemes.com/artistic/images/digital-features-img-2.jpg',
+      title: 'data-driven digital marketing',
+      description: 'Strategies combining SEO, PPC, content marketing',
+    },
+  ]
+})
+const testimonialItems = computed(() => {
+  const items = testimonialContent.value?.items
+
+  if (Array.isArray(items) && items.length) {
+    return [...items]
+      .filter((item) => (item?.status ?? 'Active') === 'Active')
+      .sort((first, second) => (first?.sort_order ?? 0) - (second?.sort_order ?? 0))
+  }
+
+  return []
+})
+const testimonialReviewImages = computed(() => {
+  const images = testimonialContent.value?.review_images
+
+  if (Array.isArray(images) && images.length) {
+    return images.filter(Boolean)
+  }
+
+  return []
+})
+const testimonialBenefits = computed(() => {
+  const items = testimonialContent.value?.benefits
+
+  if (Array.isArray(items) && items.length) {
+    return items
+  }
+
+  return []
+})
+const whyChooseItems = computed(() => {
+  const items = whyChooseUsContent.value?.items
+
+  if (Array.isArray(items) && items.length) {
+    return items
+  }
+
+  return []
+})
+const workingProcessItems = computed(() => {
+  const items = workingProcessContent.value?.items
+
+  if (Array.isArray(items) && items.length) {
+    return items
+  }
+
+  return []
+})
+
+function cancelWhoWeAreAnimation() {
+  if (whoWeAreAnimationFrame) {
+    window.cancelAnimationFrame(whoWeAreAnimationFrame)
+    whoWeAreAnimationFrame = null
+  }
+}
+
+function animateWhoWeAreCounters() {
+  cancelWhoWeAreAnimation()
+
+  const counters = whoWeAreCounters.value.map((item) => getCounterMeta(item?.value))
+  const duration = 1800
+  const start = performance.now()
+
+  animatedWhoWeAreValues.value = counters.map(() => 0)
+
+  const step = (timestamp) => {
+    const progress = Math.min((timestamp - start) / duration, 1)
+    const eased = 1 - Math.pow(1 - progress, 3)
+
+    animatedWhoWeAreValues.value = counters.map((counter) => counter.target * eased)
+
+    if (progress < 1) {
+      whoWeAreAnimationFrame = window.requestAnimationFrame(step)
+      return
+    }
+
+    animatedWhoWeAreValues.value = counters.map((counter) => counter.target)
+    whoWeAreAnimationFrame = null
+  }
+
+  whoWeAreAnimationFrame = window.requestAnimationFrame(step)
+}
+
+function observeWhoWeAreCounters() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (!whoWeAreSection.value) {
+    return
+  }
+
+  if (whoWeAreObserver) {
+    whoWeAreObserver.disconnect()
+  }
+
+  whoWeAreObserver = new window.IntersectionObserver(
+    (entries) => {
+      const [entry] = entries
+
+      if (!entry?.isIntersecting || whoWeAreAnimated) {
+        return
+      }
+
+      whoWeAreAnimated = true
+      animateWhoWeAreCounters()
+      whoWeAreObserver?.disconnect()
+      whoWeAreObserver = null
+    },
+    {
+      threshold: 0.25,
+    },
+  )
+
+  whoWeAreObserver.observe(whoWeAreSection.value)
+}
+
+watch(
+  whoWeAreCounters,
+  async (items) => {
+    animatedWhoWeAreValues.value = items.map(() => 0)
+    whoWeAreAnimated = false
+    await nextTick()
+    observeWhoWeAreCounters()
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  observeWhoWeAreCounters()
+})
+
+onBeforeUnmount(() => {
+  cancelWhoWeAreAnimation()
+  whoWeAreObserver?.disconnect()
+  whoWeAreObserver = null
+})
+</script>
+
 <template>
     <!-- Hero Section Start-->
     <div class="hero">
@@ -5,7 +362,7 @@
         <div class="hero-bg-video">
             <!-- Selfhosted Video Start -->
             <!-- <video autoplay muted loop id="myVideo"><source src="images/hero-bg-video.mp4" type="video/mp4"></video> -->
-            <video autoplay muted loop id="myVideo"><source src="https://demo.awaikenthemes.com/assets/videos/artistic-video.mp4" type="video/mp4"></video>
+            <video autoplay muted loop id="myVideo"><source :src="backgroundVideoUrl" type="video/mp4"></video>
             <!-- Selfhosted Video End -->
 
             <!-- Youtube Video Start -->
@@ -21,11 +378,9 @@
                         <!-- Section Title Start -->
                         <div class="section-title">
                             <div class="typing-title">
-                                <p>Digital World</p>
-                                <p>Social Marketing</p>
-                                <p>Art & Design</p>
+                                <p v-for="(item, index) in typedTitles" :key="`hero-typed-${index}`">{{ item }}</p>
                             </div>
-                            <h1 class="text-anime-style-2" data-cursor="-opaque">Innovative solutions for <span class="typed-title"></span></h1>
+                            <h1 class="text-anime-style-2" data-cursor="-opaque">{{ headingPrefix }} <span class="typed-title"></span></h1>
                         </div>
                         <!-- Section Title End -->
 
@@ -35,7 +390,7 @@
                             <div class="hero-content-video">
                                 <!-- Video Play Button Start -->
                                 <div class="video-play-button">
-                                    <a href="https://www.youtube.com/watch?v=Y-x0efG1seA" class="popup-video" data-cursor-text="Play">
+                                    <a :href="popupVideoUrl" class="popup-video" data-cursor-text="Play">
                                         <i class="fa-solid fa-play"></i>
                                     </a>
                                 </div>
@@ -43,7 +398,7 @@
 
                                 <!-- Learn More Circle Start -->
                                 <div class="learn-more-circle">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/learn-more-circle.svg" alt="">
+                                    <img :src="circleImageUrl" alt="">
                                 </div>
                                 <!-- Learn More Circle End -->
                             </div>
@@ -51,7 +406,7 @@
 
                             <!-- Hero Video Content Start -->
                             <div class="hero-video-content wow fadeInUp">
-                                <p>At our Creative Digital Agency, we bring your ideas to life by crafting engaging, impactful digital experiences that captivate audiences and drive results. From innovative web design to compelling content and cutting-edge digital strategies.</p>
+                                <p>{{ heroDescription }}</p>
                             </div>
                             <!-- Hero Video Content End -->
                         </div>
@@ -59,7 +414,7 @@
 
                         <!-- Hero Button Start -->
                         <div class="hero-btn wow fadeInUp" data-wow-delay="0.25s">
-                            <a href="/contact" class="btn-default">get in touch</a>
+                            <a :href="heroButtonUrl" class="btn-default">{{ heroButtonText }}</a>
                         </div>
                         <!-- Hero Button End -->
                     </div>
@@ -112,14 +467,16 @@
                     <div class="about-agency-content">
                         <!-- Section Title Start -->
                         <div class="section-title">
-                            <h3 class="wow fadeInUp">about agency</h3>
-                            <h2 class="text-anime-style-2" data-cursor="-opaque">Crafting <span>unique digital</span> experiences that elevate your brand</h2>
+                            <h3 class="wow fadeInUp">{{ aboutContent.agency_subtitle || 'about agency' }}</h3>
+                            <h2 class="text-anime-style-2" data-cursor="-opaque">
+                              {{ aboutAgencyTitleParts.before }} <span>{{ aboutAgencyTitleParts.highlight }}</span> {{ aboutAgencyTitleParts.after }}
+                            </h2>
                         </div>
                         <!-- Section Title End -->
 
                         <!-- Section btn Start -->
                         <div class="section-btn wow fadeInUp" data-wow-delay="0.25s">
-                            <a href="/about" class="btn-default">more about</a>
+                            <a :href="aboutContent.agency_cta_url || '/about'" class="btn-default">{{ aboutContent.agency_cta_text || 'more about' }}</a>
                         </div>
                         <!-- Section btn End -->
                     </div>
@@ -130,49 +487,13 @@
                     <!-- About Agency List Start -->
                     <div class="about-agency-list">
                         <!-- About Agency Item Start -->
-                        <div class="about-agency-item wow fadeInUp">
+                        <div v-for="(item, index) in aboutAgencyItems" :key="`home-agency-item-${index}`" class="about-agency-item wow fadeInUp" :data-wow-delay="index ? `${index * 0.2}s` : null">
                             <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-about-agency-1.svg" alt="">
+                                <img :src="resolveAssetUrl(item.card_icon_url)" :alt="item.name">
                             </div>
                             <div class="agency-item-content">
-                                <h3>your success, our mission </h3>
-                                <p>We measure our success by the success of our clients. With a focus on results and a dedication to quality, our mission is to deliver digital solutions that make a real impact. </p>
-                            </div>
-                        </div>
-                        <!-- About Agency Item End -->
-
-                        <!-- About Agency Item Start -->
-                        <div class="about-agency-item wow fadeInUp" data-wow-delay="0.2s">
-                            <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-about-agency-2.svg" alt="">
-                            </div>
-                            <div class="agency-item-content">
-                                <h3>creators of digital excellence </h3>
-                                <p>At the core of our agency is a commitment to excellence and creativity. We specialize in crafting digital solutions that not only meet your needs but also elevate your brand.</p>
-                            </div>
-                        </div>
-                        <!-- About Agency Item End -->
-
-                        <!-- About Agency Item Start -->
-                        <div class="about-agency-item wow fadeInUp" data-wow-delay="0.4s">
-                            <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-about-agency-3.svg" alt="">
-                            </div>
-                            <div class="agency-item-content">
-                                <h3>innovating the digital landscape</h3>
-                                <p>Founded on a passion for creativity and technology, we are a team of dedicated digital experts committed to transforming the way brands connect with audiences.</p>
-                            </div>
-                        </div>
-                        <!-- About Agency Item End -->
-
-                        <!-- About Agency Item Start -->
-                        <div class="about-agency-item wow fadeInUp" data-wow-delay="0.6s">
-                            <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-about-agency-4.svg" alt="">
-                            </div>
-                            <div class="agency-item-content">
-                                <h3>helping brands thrive online</h3>
-                                <p>Our purpose is simple: to help brands succeed in the digital age. We're passionate about building strong relationships with our clients and crafting custom strategies that drive results. </p>
+                                <h3>{{ item.title }}</h3>
+                                <p>{{ item.description }}</p>
                             </div>
                         </div>
                         <!-- About Agency Item End -->
@@ -183,7 +504,122 @@
         </div>
     </div>
     <!-- About Us Section End -->
+  <!-- Who We Are Start -->
+    <div ref="whoWeAreSection" class="who-we-are">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <!-- Who We Are Content Start -->
+                    <div class="who-we-are-content">
+                        <!-- Section Title Start -->
+                        <div class="section-title">
+                            <h3 class="wow fadeInUp">{{ whoWeAreContent.subtitle || 'who we are' }}</h3>
+                            <h2 class="text-anime-style-2" data-cursor="-opaque">
+                                {{ whoWeAreContent.title_before || 'Experts in' }} <span>{{ whoWeAreContent.title_highlight || 'digital' }}</span> {{ whoWeAreContent.title_after || 'brand innovation' }}
+                            </h2>
+                            <p class="wow fadeInUp" data-wow-delay="0.25s">{{ whoWeAreContent.description || 'We specialize in transforming brands through cutting-edge digital strategies, blending creativity with technology to drive growth, enhance engagement, and deliver memorable experiences.' }}</p>
+                        </div>
+                        <!-- Section Title End -->
 
+                        <!-- Experts Rating Video Start -->
+                        <div class="experts-rating-video">
+                            <!-- Experts Rating Video Image Start -->
+                            <div class="experts-rating-video-image">
+                                <!-- Video Image Start -->
+                                <div class="video-image">
+                                    <a :href="whoWeAreContent.video_url || popupVideoUrl" class="popup-video" data-cursor-text="Play">
+                                        <figure class="image-anime">
+                                            <img :src="resolveAssetUrl(whoWeAreContent.video_image_url || 'https://html.awaikenthemes.com/artistic/images/experts-rating-video-bg.jpg')" alt="">
+                                        </figure>
+                                    </a>
+                                </div>
+                                <!-- Video Image End -->
+
+                                <!-- Video Play Button Start -->
+                                <div class="video-play-button">
+                                    <a :href="whoWeAreContent.video_url || popupVideoUrl" class="popup-video" data-cursor-text="Play">
+                                        <i class="fa-solid fa-play"></i>
+                                    </a>
+                                </div>
+                                <!-- Video Play Button End -->
+                            </div>
+                            <!-- Experts Rating Video Image End -->
+
+                            <!-- Who We Are Company Client Start -->
+                            <div class="who-we-are-client">
+                                <div class="comapny-client-rating wow fadeInUp">
+                                    <ul>
+                                        <li>
+                                            <i class="fa-solid fa-star"></i>
+                                            <i class="fa-solid fa-star"></i>
+                                            <i class="fa-solid fa-star"></i>
+                                            <i class="fa-solid fa-star"></i>
+                                            <i class="fa-solid fa-star"></i>
+                                        </li>
+                                    </ul>
+                                    <p>{{ whoWeAreContent.review_label || testimonialContent.review_label || `(${testimonialContent.review_score || '4.9'} Reviews)` }}</p>
+                                </div>
+
+                                <!-- Company Client Images Start -->
+                                <div class="company-client-images">
+                                    <div v-for="(image, index) in whoWeAreReviewImages" :key="`home-who-we-are-client-${index}`" class="client-image">
+                                        <figure class="image-anime reveal">
+                                            <img :src="resolveAssetUrl(image)" :alt="`client review ${index + 1}`">
+                                        </figure>
+                                    </div>
+                                </div>
+                                <!-- Company Client Images End -->
+
+                                <!-- Contact Now Button Start -->
+                                <div class="contact-now-btn wow fadeInUp" data-wow-delay="0.2s">
+                                    <a :href="whoWeAreContent.cta_url || '/contact'" class="contact-btn">{{ whoWeAreContent.cta_text || 'contact now' }}</a>
+                                </div>
+                                <!-- Contact Now Button End -->
+                            </div>
+                            <!-- Who We Are Company Client End -->
+                        </div>
+                        <!-- Experts Rating Video End -->
+                    </div>
+                    <!-- Who We Are Content End -->
+                </div>
+
+                <div class="col-lg-6">
+                    <!-- Experts Counter List Start -->
+                    <div class="experts-counters-list">
+                        <!-- Experts Counter Box Start -->
+                        <div class="experts-counter-box expert-box-1">
+                            <div v-for="(item, index) in displayWhoWeAreTopCounters" :key="`home-who-we-are-top-${index}`" class="experts-counter-item">
+                                <div class="icon-box">
+                                    <img :src="resolveAssetUrl(item.icon_url)" :alt="item.label">
+                                </div>
+                                <div class="experts-counter-content">
+                                    <h2><span class="who-we-are-counter-value">{{ item.displayValue }}</span>{{ item.suffix }}</h2>
+                                    <p>{{ item.label }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Experts Counter Box End -->
+
+                        <!-- Experts Counter Box Start -->
+                        <div class="experts-counter-box expert-box-2">
+                            <div v-for="(item, index) in displayWhoWeAreBottomCounters" :key="`home-who-we-are-bottom-${index}`" class="experts-counter-item">
+                                <div class="icon-box">
+                                    <img :src="resolveAssetUrl(item.icon_url)" :alt="item.label">
+                                </div>
+                                <div class="experts-counter-content">
+                                    <h2><span class="who-we-are-counter-value">{{ item.displayValue }}</span>{{ item.suffix }}</h2>
+                                    <p>{{ item.label }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Experts Counter Box End -->
+                    </div>
+                    <!-- Experts Counter List End -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Who We Are End -->
     <!-- Our Services Section Start -->
     <div class="our-services">
         <div class="container">
@@ -191,8 +627,10 @@
                 <div class="col-lg-7">
                     <!-- Section Title Start -->
                     <div class="section-title">
-                        <h3 class="wow fadeInUp">Our services</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Our <span>digital services</span> to grow your brand</h2>
+                        <h3 class="wow fadeInUp">{{ homeServicesContent.subtitle || 'Our services' }}</h3>
+                        <h2 class="text-anime-style-2" data-cursor="-opaque">
+                            {{ homeServicesContent.title_before || 'Our' }} <span>{{ homeServicesContent.title_highlight || 'digital services' }}</span> {{ homeServicesContent.title_after || 'to grow your brand' }}
+                        </h2>
                     </div>
                     <!-- Section Title End -->
                 </div>
@@ -202,13 +640,13 @@
                     <div class="section-content-btn">
                         <!-- Section Title Content Start -->
                         <div class="section-title-content wow fadeInUp" data-wow-delay="0.2s">
-                            <p>Our digital services empower brands with innovative strategies and solutions for sustainable growth and engagement.</p>
+                            <p>{{ homeServicesContent.description || 'Our digital services empower brands with innovative strategies and solutions for sustainable growth and engagement.' }}</p>
                         </div>
                         <!-- Section Title Content End -->
 
                         <!-- Section Button Start -->
                         <div class="section-btn wow fadeInUp" data-wow-delay="0.4s">
-                            <a href="/services" class="btn-default">all services</a>
+                            <a :href="homeServicesContent.cta_url || '/services'" class="btn-default">{{ homeServicesContent.cta_text || 'all services' }}</a>
                         </div>
                         <!-- Section Button End -->
                     </div>   
@@ -217,75 +655,29 @@
             </div>
 
             <div class="row">
-                <div class="col-lg-4 col-md-6">
+                <div
+                    v-for="(item, index) in homeServices"
+                    :key="`home-service-${index}`"
+                    class="col-lg-4 col-md-6"
+                >
                     <!-- Service Item Start -->
-                    <div class="service-item wow fadeInUp">
+                    <div class="service-item wow fadeInUp" :data-wow-delay="index ? `${index * 0.2}s` : null">
                         <!-- Service Item Header Start -->
                         <div class="service-item-header">
                             <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-service-1.svg" alt="">
+                                <img :src="resolveAssetUrl(item.card_icon_url)" :alt="item.name">
                             </div>
 
                             <div class="service-arrow">
-                                <a href="service-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-accent.svg" alt=""></a>
+                                <a :href="`/services/${item.slug}`"><img src="https://html.awaikenthemes.com/artistic/images/arrow-accent.svg" alt=""></a>
                             </div>
                         </div>
                         <!-- Service Item Header End -->
 
                         <!-- Service Item Body Start -->
                         <div class="service-item-body">
-                            <h3>branding and identity</h3>
-                            <p>Developing a compelling brand identity through strategy, visuals, and  to build strong customer connections.</p>
-                        </div>
-                        <!-- Service Item Body End -->
-                    </div>
-                    <!-- Service Item End -->
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <!-- Service Item Start -->
-                    <div class="service-item wow fadeInUp" data-wow-delay="0.2s">
-                        <!-- Service Item Header Start -->
-                        <div class="service-item-header">
-                            <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-service-2.svg" alt="">
-                            </div>
-
-                            <div class="service-arrow">
-                                <a href="service-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-accent.svg" alt=""></a>
-                            </div>
-                        </div>
-                        <!-- Service Item Header End -->
-
-                        <!-- Service Item Body Start -->
-                        <div class="service-item-body">
-                            <h3>digital marketing</h3>
-                            <p>Developing a compelling brand identity through strategy, visuals, and  to build strong customer connections.</p>
-                        </div>
-                        <!-- Service Item Body End -->
-                    </div>
-                    <!-- Service Item End -->
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <!-- Service Item Start -->
-                    <div class="service-item wow fadeInUp" data-wow-delay="0.4s">
-                        <!-- Service Item Header Start -->
-                        <div class="service-item-header">
-                            <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-service-3.svg" alt="">
-                            </div>
-
-                            <div class="service-arrow">
-                                <a href="service-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-accent.svg" alt=""></a>
-                            </div>
-                        </div>
-                        <!-- Service Item Header End -->
-
-                        <!-- Service Item Body Start -->
-                        <div class="service-item-body">
-                            <h3>creative content production</h3>
-                            <p>Developing a compelling brand identity through strategy, visuals, and  to build strong customer connections.</p>
+                            <h3>{{ item.name }}</h3>
+                            <p>{{ item.short_description }}</p>
                         </div>
                         <!-- Service Item Body End -->
                     </div>
@@ -294,7 +686,7 @@
 
                 <div class="col-lg-12">
                     <div class="service-footer wow fadeInUp" data-wow-delay="0.25s">
-                        <p>Let's make something great work together. <a href="/contact">get free quote</a></p>
+                        <p>{{ homeServicesContent.footer_text || "Let's make something great work together." }} <a :href="homeServicesContent.footer_link_url || '/contact'">{{ homeServicesContent.footer_link_text || 'get free quote' }}</a></p>
                     </div>
                 </div>
             </div>
@@ -302,57 +694,7 @@
     </div>
     <!-- Our Services Section End -->
 
-    <!-- Digital Success Section Start -->
-    <div class="digital-success">
-        <div class="container">
-            <div class="row">
-                <div class="col-lg-12">
-                    <!-- Digital Success Box Start -->
-                    <div class="digital-success-box">
-                        <!-- Digital Success Content Start -->
-                        <div class="digital-success-content">
-                            <!-- Section Title Start -->
-                            <div class="section-title">
-                                <h2 class="text-anime-style-2" data-cursor="-opaque">Expertise that drives digital <span>success</span></h2>
-                            </div>
-                            <!-- Section Title End -->
-
-                            <!-- Success Counter Box Start -->
-                            <div class="success-counter-box">
-                                <!-- Success Counter Item Start -->
-                                <div class="success-counter-item">
-                                    <h2>+<span class="counter">60</span>%</h2>
-                                    <p>By optimizing your website for search engines.</p>
-                                </div>
-                                <!-- Success Counter Item End -->
-
-                                <!-- Success Counter Item Start -->
-                                <div class="success-counter-item">
-                                    <h2>+<span class="counter">30</span>%</h2>
-                                    <p>Rise in revenue as more visitors convert into paying customers.</p>
-                                </div>
-                                <!-- Success Counter Item End -->
-                            </div>
-                            <!-- Success Counter Box End -->
-                        </div>
-                        <!-- Digital Success Content End -->
-
-                        <div class="digital-success-list">
-                            <div class="success-list-item wow fadeInUp">
-                                <p><span>Social Media Management:</span> Our social media management services focus on building and enhancing your brand's online presence. We create engaging content, manage your social media accounts, and analyze performance.</p>
-                            </div>
-
-                            <div class="success-list-item wow fadeInUp" data-wow-delay="0.25s">
-                                <p><span>E-commerce Solutions:</span> Our e-commerce solutions are designed to create seamless online shopping experiences. From user-friendly website design to secure payment processing and inventory management.</p>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Digital Success Box End -->
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- Digital Success Section End -->
+  
 
     <!-- Why Choose us Section Start -->
     <div class="why-choose-us">
@@ -361,8 +703,8 @@
                 <div class="col-lg-7">
                     <!-- Section Title Start -->
                     <div class="section-title">
-                        <h3 class="wow fadeInUp">why choose</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Expertise for <span>your digital</span> growth journey</h2>
+                        <h3 class="wow fadeInUp">{{ whyChooseUsContent.subtitle || 'why choose' }}</h3>
+                        <h2 class="text-anime-style-2" data-cursor="-opaque">{{ whyChooseUsContent.title_before || 'Expertise for' }} <span>{{ whyChooseUsContent.title_highlight || 'your digital' }}</span> {{ whyChooseUsContent.title_after || 'growth journey' }}</h2>
                     </div>
                     <!-- Section Title End -->
                 </div>
@@ -370,7 +712,7 @@
                 <div class="col-lg-5">
                     <!-- Section Title Content Start -->
                     <div class="section-title-content wow fadeInUp" data-wow-delay="0.25s">
-                        <p>Our dedicated team is committed to understanding your unique needs, ensuring that we provide innovative strategies that drive results. With a focus on quality and integrity.</p>
+                        <p>{{ whyChooseUsContent.description || 'Our dedicated team is committed to understanding your unique needs, ensuring that we provide innovative strategies that drive results. With a focus on quality and integrity.' }}</p>
                     </div>
                     <!-- Section Title Content End -->          
                 </div>
@@ -380,26 +722,16 @@
                 <div class="col-lg-6">
                     <!-- Why Choose Content Start -->
                     <div class="why-choose-content">
-                        <!-- Why Choose Item Start -->
-                        <div class="why-choose-item active wow fadeInUp">
-                            <h3>Data-driven Approach</h3>
-                            <p>We leverage data and insights to make informed decisions that lead to more effective and efficient solutions.</p>
+                        <div
+                            v-for="(item, index) in whyChooseItems"
+                            :key="`home-why-choose-${index}`"
+                            class="why-choose-item wow fadeInUp"
+                            :class="{ active: index === 0 }"
+                            :data-wow-delay="index ? `${index * 0.25}s` : null"
+                        >
+                            <h3>{{ item.title }}</h3>
+                            <p>{{ item.description }}</p>
                         </div>
-                        <!-- Why Choose Item End -->
-
-                        <!-- Why Choose Item Start -->
-                        <div class="why-choose-item wow fadeInUp" data-wow-delay="0.25s">
-                            <h3>Competitive Pricing</h3>
-                            <p>We offer our top-quality services at competitive prices, providing you with great value for your investment.</p>
-                        </div>
-                        <!-- Why Choose Item End -->
-
-                        <!-- Why Choose Item Start -->
-                        <div class="why-choose-item wow fadeInUp" data-wow-delay="0.5s">
-                            <h3>Ethical Business Practices</h3>
-                            <p>We maintain the highest level of professionalism and ethical standards professionalism in all our business dealings.</p>
-                        </div>
-                        <!-- Why Choose Item End -->
                     </div>
                     <!-- Why Choose Content End -->
                 </div>
@@ -407,8 +739,8 @@
                 <div class="col-lg-6">
                     <!-- Why Choose Image Start -->
                     <div class="why-choose-image">
-                        <figure class="image-anime reveal">
-                            <img src="https://html.awaikenthemes.com/artistic/images/why-choose-image.jpg" alt="">
+                        <figure class="image-anime">
+                            <img :src="resolveAssetUrl(whyChooseUsContent.image_url || 'https://html.awaikenthemes.com/artistic/images/why-choose-image.jpg')" alt="">
                         </figure>
                     </div>
                     <!-- Why Choose Image End -->
@@ -418,107 +750,6 @@
     </div>
     <!-- Why Choose us Section End -->
 
-    <!-- Join Agency Section Start -->
-    <div class="join-agency">
-        <div class="container">
-            <div class="row section-row align-items-center">
-                <div class="col-lg-7">
-                    <!-- Section Title Start -->
-                    <div class="section-title">
-                        <h3 class="wow fadeInUp">join agency</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Join our <span>agency</span> of creative innovators</h2>
-                    </div>
-                    <!-- Section Title End -->
-                </div>
-                <div class="col-lg-5">
-                    <!-- Section Title Content Start -->
-                    <div class="section-title-content wow fadeInUp" data-wow-delay="0.25s">
-                        <p>Join our creative community to collaborate, innovate, and thrive together We welcome passionate individuals eager to make.</p>
-                    </div>
-                    <!-- Section Title Content End -->
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-lg-4 col-md-6">
-                    <!-- Agency Social Item Start -->
-                    <div class="agency-social-item wow fadeInUp">
-                        <!-- Icon Box Start -->
-                        <div class="icon-box">
-                            <a href="#"><i class="fa-brands fa-x-twitter"></i></a>
-                        </div>
-                        <!-- Icon Box End -->
-                        
-                        <!-- Agency Social Content Start -->
-                        <div class="agency-social-content">
-                            <h3>Follow us on Twitter</h3>
-                            <p>@artistic_official</p>
-                        </div>
-                        <!-- Agency Social Content End -->
-
-                        <!-- Social Readmore Button Start -->
-                        <div class="agency-social-btn">
-                            <a href="/contact" class="readmore-btn"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                        </div>
-                        <!-- Social Readmore Button End -->
-                    </div>
-                    <!-- Agency Social Item End -->
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <!-- Agency Social Item Start -->
-                    <div class="agency-social-item wow fadeInUp" data-wow-delay="0.25s">
-                        <!-- Icon Box Start -->
-                        <div class="icon-box">
-                            <a href="#"><i class="fa-brands fa-linkedin-in"></i></a>
-                        </div>
-                        <!-- Icon Box End -->
-
-                        <!-- Agency Social Content Start -->
-                        <div class="agency-social-content">
-                            <h3>Join us on Linked in</h3>
-                            <p>user.artistic_official</p>
-                        </div>
-                        <!-- Agency Social Content End -->
-
-                        <!-- Social Readmore Button Start -->
-                        <div class="agency-social-btn">
-                            <a href="/contact" class="readmore-btn"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                        </div>
-                        <!-- Social Readmore Button End -->
-                    </div>
-                    <!-- Agency Social Item End -->
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <!-- Agency Social Item Start -->
-                    <div class="agency-social-item wow fadeInUp" data-wow-delay="0.5s">
-                        <!-- Icon Box Start -->
-                        <div class="icon-box">
-                            <a href="#"><i class="fa-brands fa-instagram"></i></a>
-                        </div>
-                        <!-- Icon Box End -->
-
-                        <!-- Agency Social Content Start -->
-                        <div class="agency-social-content">
-                            <h3>Follow on Instagram</h3>
-                            <p>@artistic_insta_official</p>
-                        </div>
-                        <!-- Agency Social Content End -->
-
-                        <!-- Social Readmore Button Start -->
-                        <div class="agency-social-btn">
-                            <a href="/contact" class="readmore-btn"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                        </div>
-                        <!-- Social Readmore Button End -->
-                    </div>
-                    <!-- Agency Social Item End -->
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- Join Agency Section End -->
-    
     <!-- How It Work Section Start -->
     <div class="how-it-work">
         <div class="container">
@@ -526,35 +757,39 @@
                 <div class="col-lg-7">
                     <!-- Section Title Start -->
                     <div class="section-title">
-                        <h3 class="wow fadeInUp">how it work</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Our proven <span>process</span> for achieving success</h2>
+                        <h3 class="wow fadeInUp">{{ workingProcessContent.subtitle || 'how it work' }}</h3>
+                        <h2 class="text-anime-style-2" data-cursor="-opaque">{{ workingProcessContent.title_before || 'Our proven' }} <span>{{ workingProcessContent.title_highlight || 'process' }}</span> {{ workingProcessContent.title_after || 'for achieving success' }}</h2>
                     </div>
                     <!-- Section Title End -->
                 </div>
                 <div class="col-lg-5">
                     <!-- Section Title Content Start -->
                     <div class="section-title-content wow fadeInUp" data-wow-delay="0.25s">
-                        <p>Our proven process combines research, strategy, and creativity to deliver tailored solutions that drive measurable results.</p>
+                        <p>{{ workingProcessContent.description || 'Our proven process combines research, strategy, and creativity to deliver tailored solutions that drive measurable results.' }}</p>
                     </div>
                     <!-- Section Title Content End -->
                 </div>
             </div>
 
             <div class="row">
-                <div class="col-lg-4 col-md-6">
+                <div
+                    v-for="(item, index) in workingProcessItems"
+                    :key="`home-working-process-${index}`"
+                    class="col-lg-4 col-md-6"
+                >
                     <!-- Work Process Item Start -->
-                    <div class="work-process-item wow fadeInUp">
+                    <div class="work-process-item wow fadeInUp" :data-wow-delay="index ? `${index * 0.25}s` : null">
                         <!-- Work Process Header Start -->
                         <div class="work-process-header">
                             <!-- Work Process Title Start -->
                             <div class="work-process-title">
-                                <h3>discovery phase</h3>
+                                <h3>{{ item.title }}</h3>
                             </div>
                             <!-- Work Process Title End -->
 
                             <!-- Work Process Button Start -->
                             <div class="work-process-btn">
-                                <a href="/contact" class="readmore-btn"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
+                                <a :href="item.link_url || '/contact'" class="readmore-btn"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
                             </div>
                             <!-- Work Process Button End -->
                         </div>
@@ -562,7 +797,7 @@
 
                         <!-- Work Process Content Start -->
                         <div class="work-process-content">
-                            <p>Initial consultation to understand your brand, goals, and target audience Conducting research and analysis of market trends.</p>
+                            <p>{{ item.description }}</p>
                         </div>
                         <!-- Work Process Content End -->
 
@@ -571,103 +806,13 @@
                             <!-- Work Process Number Start -->
                             <div class="work-process-no">
                                 <h3>step</h3>
-                                <h2>01</h2>
+                                <h2>{{ `0${index + 1}`.slice(-2) }}</h2>
                             </div>
                             <!-- Work Process Number End -->
 
                             <!-- Work Process Icon Box Start -->
                             <div class="work-process-icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-work-process-1.svg" alt="">
-                            </div>
-                            <!-- Work Process Icon Box End -->
-                        </div>
-                        <!-- Work Process Body End -->
-                    </div>
-                    <!-- Work Process Item End -->
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <!-- Work Process Item Start -->
-                    <div class="work-process-item wow fadeInUp" data-wow-delay="0.25s">
-                        <!-- Work Process Header Start -->
-                        <div class="work-process-header">
-                            <!-- Work Process Title Start -->
-                            <div class="work-process-title">
-                                <h3>implementation</h3>
-                            </div>
-                            <!-- Work Process Title End -->
-
-                            <!-- Work Process Button Start -->
-                            <div class="work-process-btn">
-                                <a href="/contact" class="readmore-btn"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                            </div>
-                            <!-- Work Process Button End -->
-                        </div>
-                        <!-- Work Process Header End -->
-
-                        <!-- Work Process Content Start -->
-                        <div class="work-process-content">
-                            <p>Initial consultation to understand your brand, goals, and target audience Conducting research and analysis of market trends.</p>
-                        </div>
-                        <!-- Work Process Content End -->
-
-                        <!-- Work Process Body Start -->
-                        <div class="work-process-body">
-                            <!-- Work Process Number Start -->
-                            <div class="work-process-no">
-                                <h3>step</h3>
-                                <h2>02</h2>
-                            </div>
-                            <!-- Work Process Number End -->
-
-                            <!-- Work Process Icon Box Start -->
-                            <div class="work-process-icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-work-process-2.svg" alt="">
-                            </div>
-                            <!-- Work Process Icon Box End -->
-                        </div>
-                        <!-- Work Process Body End -->
-                    </div>
-                    <!-- Work Process Item End -->
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <!-- Work Process Item Start -->
-                    <div class="work-process-item wow fadeInUp" data-wow-delay="0.5s">
-                        <!-- Work Process Header Start -->
-                        <div class="work-process-header">
-                            <!-- Work Process Title Start -->
-                            <div class="work-process-title">
-                                <h3>collaboration</h3>
-                            </div>
-                            <!-- Work Process Title End -->
-
-                            <!-- Work Process Button Start -->
-                            <div class="work-process-btn">
-                                <a href="/contact" class="readmore-btn"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                            </div>
-                            <!-- Work Process Button End -->
-                        </div>
-                        <!-- Work Process Header End -->
-
-                        <!-- Work Process Content Start -->
-                        <div class="work-process-content">
-                            <p>Initial consultation to understand your brand, goals, and target audience Conducting research and analysis of market trends.</p>
-                        </div>
-                        <!-- Work Process Content End -->
-
-                        <!-- Work Process Body Start -->
-                        <div class="work-process-body">
-                            <!-- Work Process Number Start -->
-                            <div class="work-process-no">
-                                <h3>step</h3>
-                                <h2>03</h2>
-                            </div>
-                            <!-- Work Process Number End -->
-
-                            <!-- Work Process Icon Box Start -->
-                            <div class="work-process-icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-work-process-3.svg" alt="">
+                                <img :src="resolveAssetUrl(item.icon_url)" :alt="item.title">
                             </div>
                             <!-- Work Process Icon Box End -->
                         </div>
@@ -687,8 +832,10 @@
                 <div class="col-lg-6">
                     <!-- Section Title Start -->
                     <div class="section-title">
-                        <h3 class="wow fadeInUp">features</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Innovative <span>features</span> for your digital success</h2>
+                        <h3 class="wow fadeInUp">{{ homeFeaturesContent.subtitle || 'features' }}</h3>
+                        <h2 class="text-anime-style-2" data-cursor="-opaque">
+                            {{ homeFeaturesContent.title_before || 'Innovative' }} <span>{{ homeFeaturesContent.title_highlight || 'features' }}</span> {{ homeFeaturesContent.title_after || 'for your digital success' }}
+                        </h2>
                     </div>
                     <!-- Section Title End -->
                 </div>
@@ -698,13 +845,13 @@
                     <div class="section-content-btn">
                         <!-- Section Title Content Start -->
                         <div class="section-title-content wow fadeInUp" data-wow-delay="0.2s">
-                            <p>Our digital services empower brands with innovative strategies and solutions for sustainable growth and engagement.</p>
+                            <p>{{ homeFeaturesContent.description || 'Our digital services empower brands with innovative strategies and solutions for sustainable growth and engagement.' }}</p>
                         </div>
                         <!-- Section Title Content End -->
 
                         <!-- Section Button Start -->
                         <div class="section-btn wow fadeInUp" data-wow-delay="0.4s">
-                            <a href="/contact" class="btn-default">leran more</a>
+                            <a :href="homeFeaturesContent.cta_url || '/contact'" class="btn-default">{{ homeFeaturesContent.cta_text || 'learn more' }}</a>
                         </div>
                         <!-- Section Button End -->
                     </div>   
@@ -715,136 +862,28 @@
             <div class="col-lg-12">
                 <!-- Digital Features Box Start -->
                 <div class="digital-features-box">
-                    <!-- Digital Features Item Start -->
-                    <div class="digital-features-item features-item-1 wow fadeInUp">
+                    <div
+                        v-for="(item, index) in homeFeatureItems"
+                        :key="`home-feature-${index}`"
+                        class="digital-features-item wow fadeInUp"
+                        :class="`features-item-${index + 1}`"
+                        :data-wow-delay="index ? `${index * 0.25}s` : null"
+                    >
                         <!-- Digital Features Image Start -->
                         <div class="digital-features-image">
                             <figure class="image-anime">
-                                <img src="https://html.awaikenthemes.com/artistic/images/digital-features-img-1.jpg" alt="">
+                                <img :src="resolveAssetUrl(item.image_url)" :alt="item.title">
                             </figure>
                         </div>
                         <!-- Digital Features Image End -->
 
                         <!-- Digital Features Content Start -->
                         <div class="digital-features-content">
-                            <h3>custom branding solutions</h3>
-                            <p>Unique brand identity development, including logos, color palettes.</p>
+                            <h3>{{ item.title }}</h3>
+                            <p>{{ item.description }}</p>
                         </div>
                         <!-- Digital Features Content End -->
                     </div>
-                    <!-- Digital Features Item End -->
-
-                    <!-- Digital Features Item Start -->
-                    <div class="digital-features-item features-item-2 wow fadeInUp" data-wow-delay="0.25s">
-                        <!-- Digital Features Image Start -->
-                        <div class="digital-features-image">
-                            <figure class="image-anime">
-                                <img src="https://html.awaikenthemes.com/artistic/images/digital-features-img-2.jpg" alt="">
-                            </figure>
-                        </div>
-                        <!-- Digital Features Image End -->
-
-                        <!-- Digital Features Content Start -->
-                        <div class="digital-features-content">
-                            <h3>data-driven digital marketing</h3>
-                            <p>Strategies combining SEO, PPC, content marketing</p>
-                        </div>
-                        <!-- Digital Features Content End -->
-                    </div>
-                    <!-- Digital Features Item End -->  
-                    
-                    <!-- Agency Support Start -->
-                    <div class="digital-features-item agency-supports">
-                        <!-- Agency Support Header Start -->
-                        <div class="agency-supports-header">
-                            <!-- Agency Support Content Start -->
-                            <div class="agency-supports-content wow fadeInUp">
-                                <h3>Content Creation and Strategy</h3>
-                                <p>High-quality, engaging content across blogs, videos, and graphics designed to captivate and retain audiences.</p>
-                            </div>
-                            <!-- Agency Support Content End -->
-
-                            <!-- Agency Free Consultation Start -->
-                            <div class="agency-free-consultation">
-                                <img src="https://html.awaikenthemes.com/artistic/images/free-consultation-circle.png" alt="">
-                            </div>
-                            <!-- Agency Free Consultation End -->
-                        </div>
-                        <!-- Agency Support Header End -->
-
-                        <!-- Agency Support Slider Start -->
-                        <div class="agency-supports-slider">
-                            <div class="swiper">
-                                <div class="swiper-wrapper">
-                                    <!-- Agency Support Logo Start -->
-                                    <div class="swiper-slide">
-                                        <div class="agency-supports-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/agency-supports-logo-1.svg" alt="">
-                                        </div>
-                                    </div>
-                                    <!-- Agency Support Logo End -->
-    
-                                    <!-- Agency Support Logo Start -->
-                                    <div class="swiper-slide">
-                                        <div class="agency-supports-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/agency-supports-logo-2.svg" alt="">
-                                        </div>
-                                    </div>
-                                    <!-- Agency Support Logo End -->
-    
-                                    <!-- Agency Support Logo Start -->
-                                    <div class="swiper-slide">
-                                        <div class="agency-supports-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/agency-supports-logo-3.svg" alt="">
-                                        </div>
-                                    </div>
-                                    <!-- Agency Support Logo End -->
-                                    
-                                    <!-- Agency Support Logo Start -->
-                                    <div class="swiper-slide">
-                                        <div class="agency-supports-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/agency-supports-logo-4.svg" alt="">
-                                        </div>
-                                    </div>
-                                    <!-- Agency Support Logo End -->
-                                    
-                                    <!-- Agency Support Logo Start -->
-                                    <div class="swiper-slide">
-                                        <div class="agency-supports-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/agency-supports-logo-5.svg" alt="">
-                                        </div>
-                                    </div>
-                                    <!-- Agency Support Logo End -->
-                                    
-                                    <!-- Agency Support Logo Start -->
-                                    <div class="swiper-slide">
-                                        <div class="agency-supports-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/agency-supports-logo-6.svg" alt="">
-                                        </div>
-                                    </div>
-                                    <!-- Agency Support Logo End -->
-                                    
-                                    <!-- Agency Support Logo Start -->
-                                    <div class="swiper-slide">
-                                        <div class="agency-supports-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/agency-supports-logo-3.svg" alt="">
-                                        </div>
-                                    </div>
-                                    <!-- Agency Support Logo End -->
-
-                                    <!-- Agency Support Logo Start -->
-                                    <div class="swiper-slide">
-                                        <div class="agency-supports-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/agency-supports-logo-5.svg" alt="">
-                                        </div>
-                                    </div>
-                                    <!-- Agency Support Logo End -->
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Agency Support Slider End -->
-                    </div>
-                    <!-- Agency Support End -->
                 </div>
                 <!-- Digital Features Box End -->
             </div>
@@ -859,8 +898,12 @@
                 <div class="col-lg-7">
                     <!-- Section Title Start -->
                     <div class="section-title">
-                        <h3 class="wow fadeInUp">portfolio</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Brands with cutting-edge digital <span>solutions & design</span></h2>
+                        <h3 class="wow fadeInUp">{{ homeProjectsSection.home_title || 'portfolio' }}</h3>
+                        <h2 class="text-anime-style-2" data-cursor="-opaque">
+                            {{ homeProjectsSection.home_heading_before || 'Brands with cutting-edge digital' }}
+                            <span>{{ homeProjectsSection.home_heading_highlight || 'solutions & design' }}</span>
+                            {{ homeProjectsSection.home_heading_after || '' }}
+                        </h2>
                     </div>
                     <!-- Section Title End -->
                 </div>
@@ -868,22 +911,21 @@
                 <div class="col-lg-5">
                     <!-- Section Title Content Start -->
                     <div class="section-title-content wow fadeInUp" data-wow-delay="0.25s">
-                        <p>Empowering brands through innovative digital strategies, immersive design, and tailored solutions that drive growth and engagement.</p>
+                        <p>{{ homeProjectsSection.home_description || 'Empowering brands through innovative digital strategies, immersive design, and tailored solutions that drive growth and engagement.' }}</p>
                     </div>
                     <!-- Section Title Content End -->          
                 </div>
             </div>
 
             <div class="row">
-                <div class="col-lg-12 col-md-12">
+				<div class="col-lg-12 col-md-12">
 					<!-- Choose Our Project Nav start -->
 					<div class="our-Project-nav wow fadeInUp" data-wow-delay="0.25s">
 						<ul>
 							<li><a href="#" class="active-btn" data-filter="*">all</a></li>
-							<li><a href="#" data-filter=".branding">Branding & Identity</a></li>
-							<li><a href="#" data-filter=".web">Web Design</a></li>
-							<li><a href="#" data-filter=".digital">Digital Marketing</a></li>
-							<li><a href="#" data-filter=".analytics">SEO & Analytics</a></li>
+							<li v-for="category in homeProjectCategories" :key="`home-project-category-${category.className}`">
+                                <a href="#" :data-filter="`.${category.className}`">{{ category.label }}</a>
+                            </li>
 						</ul>
 					</div>
 					<!-- Choose Our Project Nav End -->
@@ -892,145 +934,32 @@
                 <div class="col-lg-12">
                     <!-- Project Item Boxes start -->
 					<div class="row project-item-boxes align-items-center">
-						<div class="col-lg-4 col-md-6 project-item-box branding web analytics">
+						<div
+                            v-for="(item, index) in homeProjects"
+                            :key="item.slug || `home-project-${index}`"
+                            class="col-lg-4 col-md-6 project-item-box"
+                            :class="normalizeCategory(item.category)"
+                        >
                             <!-- Project Item Start -->
-                            <div class="project-item wow fadeInUp">
+                            <div class="project-item wow fadeInUp" :data-wow-delay="index ? `${index * 0.2}s` : null">
                                 <div class="project-image">
-                                    <figure class="image-anime">
-                                        <img src="https://html.awaikenthemes.com/artistic/images/project-1.jpg" alt="">
-                                    </figure>
+                                    <RouterLink :to="`/projects/${item.slug}`" class="image-anime">
+                                        <figure>
+                                            <img :src="resolveAssetUrl(item.list_image_url || item.home_image_url)" :alt="item.name">
+                                        </figure>
+                                    </RouterLink>
 
                                     <div class="project-tag">
-                                        <a href="project-single.html">web design</a>
+                                        <RouterLink :to="`/projects/${item.slug}`">{{ item.category }}</RouterLink>
                                     </div>   
 
                                     <div class="project-btn">
-                                        <a href="project-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
+                                        <RouterLink :to="`/projects/${item.slug}`"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></RouterLink>
                                     </div>
                                 </div>                                                           
                                 
                                 <div class="project-content">
-                                    <h3>Dynamic E-commerce Platform</h3>
-                                </div>
-                            </div>
-                            <!-- Project Item End -->
-                        </div>
-
-                        <div class="col-lg-4 col-md-6 project-item-box web digital urban">
-                            <!-- Project Item Start -->
-                            <div class="project-item wow fadeInUp">
-                                <div class="project-image">
-                                    <figure class="image-anime">
-                                        <img src="https://html.awaikenthemes.com/artistic/images/project-2.jpg" alt="">
-                                    </figure>
-
-                                    <div class="project-tag">
-                                        <a href="project-single.html">digital marketing</a>
-                                    </div>   
-
-                                    <div class="project-btn">
-                                        <a href="project-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                                    </div>
-                                </div>                                                           
-                                
-                                <div class="project-content">
-                                    <h3>innovative identity design</h3>
-                                </div>
-                            </div>
-                            <!-- Project Item End -->
-                        </div>
-
-                        <div class="col-lg-4 col-md-6 project-item-box digital analytics">
-                            <!-- Project Item Start -->
-                            <div class="project-item wow fadeInUp" data-wow-delay="0.2s">
-                                <div class="project-image">
-                                    <figure class="image-anime">
-                                        <img src="https://html.awaikenthemes.com/artistic/images/project-3.jpg" alt="">
-                                    </figure>
-
-                                    <div class="project-tag">
-                                        <a href="project-single.html">SEO & analytics</a>
-                                    </div>   
-
-                                    <div class="project-btn">
-                                        <a href="project-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                                    </div>
-                                </div>                                                           
-                                
-                                <div class="project-content">
-                                    <h3>dynamic digital campaign</h3>
-                                </div>
-                            </div>
-                            <!-- Project Item End -->
-                        </div>
-
-                        <div class="col-lg-4 col-md-6 project-item-box branding analytics">
-                            <!-- Project Item Start -->
-                            <div class="project-item wow fadeInUp" data-wow-delay="0.4s">
-                                <div class="project-image">
-                                    <figure class="image-anime">
-                                        <img src="https://html.awaikenthemes.com/artistic/images/project-4.jpg" alt="">
-                                    </figure>
-
-                                    <div class="project-tag">
-                                        <a href="project-single.html">branding & identity</a>
-                                    </div>   
-
-                                    <div class="project-btn">
-                                        <a href="project-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                                    </div>
-                                </div>                                                           
-                                
-                                <div class="project-content">
-                                    <h3>impactful content creation</h3>
-                                </div>
-                            </div>
-                            <!-- Project Item End -->
-                        </div>
-
-                        <div class="col-lg-4 col-md-6 project-item-box web service branding">
-                            <!-- Project Item Start -->
-                            <div class="project-item wow fadeInUp" data-wow-delay="0.6s">
-                                <div class="project-image">
-                                    <figure class="image-anime">
-                                        <img src="https://html.awaikenthemes.com/artistic/images/project-5.jpg" alt="">
-                                    </figure>
-
-                                    <div class="project-tag">
-                                        <a href="project-single.html">web design</a>
-                                    </div>   
-
-                                    <div class="project-btn">
-                                        <a href="project-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                                    </div>
-                                </div>                                                           
-                                
-                                <div class="project-content">
-                                    <h3>innovative identity design</h3>
-                                </div>
-                            </div>
-                            <!-- Project Item End -->
-                        </div>
-
-                        <div class="col-lg-4 col-md-6 project-item-box digital">
-                            <!-- Project Item Start -->
-                            <div class="project-item wow fadeInUp" data-wow-delay="0.8s">
-                                <div class="project-image">
-                                    <figure class="image-anime">
-                                        <img src="https://html.awaikenthemes.com/artistic/images/project-6.jpg" alt="">
-                                    </figure>
-
-                                    <div class="project-tag">
-                                        <a href="project-single.html">branding & identity</a>
-                                    </div>   
-
-                                    <div class="project-btn">
-                                        <a href="project-single.html"><img src="https://html.awaikenthemes.com/artistic/images/arrow-white.svg" alt=""></a>
-                                    </div>
-                                </div>                                                           
-                                
-                                <div class="project-content">
-                                    <h3>interactive website redesign</h3>
+                                    <h3>{{ item.name }}</h3>
                                 </div>
                             </div>
                             <!-- Project Item End -->
@@ -1050,28 +979,16 @@
                 <div class="col-lg-7">
                     <!-- Section Title Start -->
                     <div class="section-title">
-                        <h3 class="wow fadeInUp">testimonials</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Read what they have to say about <span>working with us</span></h2>
+                        <h3 class="wow fadeInUp">{{ testimonialContent.subtitle || 'testimonials' }}</h3>
+                        <h2 class="text-anime-style-2" data-cursor="-opaque">{{ testimonialContent.title_before || 'Read what they have to say about' }} <span>{{ testimonialContent.title_highlight || 'working with us' }}</span>{{ testimonialContent.title_after ? ` ${testimonialContent.title_after}` : '' }}</h2>
                     </div>
                     <!-- Section Title End -->
                 </div>
 
                 <div class="col-lg-5">
-                    <!-- Section Content Button Start -->
-                    <div class="section-content-btn">
-                        <!-- Section Title Content Start -->
-                        <div class="section-title-content wow fadeInUp" data-wow-delay="0.2s">
-                            <p>Discover how our clients have achieved success through our innovative solutions and dedicated support.</p>
-                        </div>
-                        <!-- Section Title Content End -->
-
-                        <!-- Section Button Start -->
-                        <div class="section-btn wow fadeInUp" data-wow-delay="0.4s">
-                            <a href="testimonial.html" class="btn-default">all testimonials</a>
-                        </div>
-                        <!-- Section Button End -->
-                    </div>   
-                    <!-- Section Content Button End -->
+                    <div class="section-title-content wow fadeInUp" data-wow-delay="0.2s">
+                        <p>{{ testimonialContent.description || 'Discover how our clients have achieved success through our innovative solutions and dedicated support.' }}</p>
+                    </div>
                 </div>
             </div>
 
@@ -1081,7 +998,7 @@
                     <div class="testimonial-review-box">
                         <!-- Testimonial Review Header Start -->
                         <div class="testimonial-review-header">
-                            <h2><span class="counter">4.9</span></h2>
+                            <h2><span>{{ testimonialContent.review_score || '4.9' }}</span></h2>
                             <div class="testimonial-rating">
                                 <i class="fa-solid fa-star"></i>
                                 <i class="fa-solid fa-star"></i>
@@ -1089,41 +1006,21 @@
                                 <i class="fa-solid fa-star"></i>
                                 <i class="fa-solid fa-star"></i>
                             </div>
-                            <p>(40+ Reviews)</p>
+                            <p>{{ testimonialContent.review_label || '(40+ Reviews)' }}</p>
                         </div>
                         <!-- Testimonial Review Header End -->
 
                         <!-- Testimonial Review Content Start -->
                         <div class="testimonial-review-content wow fadeInUp">
-                            <h3>Customer experiences that speak for themselves</h3>
+                            <h3>{{ testimonialContent.review_heading || 'Customer experiences that speak for themselves' }}</h3>
                         </div>
                         <!-- Testimonial Review Content End -->
 
                         <!-- Testimonial Review Image Start -->
                         <div class="testimonial-review-image">
-                            <div class="satisfy-client-image">
-                                <figure class="image-anime reveal">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/satisfy-client-img-1.jpg" alt="">
-                                </figure>
-                            </div>
-                            <div class="satisfy-client-image">
-                                <figure class="image-anime reveal">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/satisfy-client-img-2.jpg" alt="">
-                                </figure>
-                            </div>
-                            <div class="satisfy-client-image">
-                                <figure class="image-anime reveal">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/satisfy-client-img-3.jpg" alt="">
-                                </figure>
-                            </div>
-                            <div class="satisfy-client-image">
-                                <figure class="image-anime reveal">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/satisfy-client-img-4.jpg" alt="">
-                                </figure>
-                            </div>
-                            <div class="satisfy-client-image">
-                                <figure class="image-anime reveal">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/satisfy-client-img-5.jpg" alt="">
+                            <div v-for="(image, index) in testimonialReviewImages" :key="`testimonial-review-${index}`" class="satisfy-client-image">
+                                <figure class="image-anime">
+                                    <img :src="resolveAssetUrl(image)" :alt="`testimonial review ${index + 1}`">
                                 </figure>
                             </div>
                         </div>
@@ -1135,69 +1032,29 @@
                 <div class="col-lg-8">
                     <!-- Testimonial Slider Start -->
                     <div class="testimonial-slider">
-                        <div class="swiper">
-                            <div class="swiper-wrapper" data-cursor-text="Drag">
-                                <!-- Testimonial Slide Start -->
-                                <div class="swiper-slide">
+                            <div class="swiper">
+                                <div class="swiper-wrapper" data-cursor-text="Drag">
+                                <div v-for="item in testimonialItems" :key="item.id || item.author_name" class="swiper-slide">
                                     <div class="testimonial-item">
-                                        <div class="testimonial-company-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/icon-testimonial-logo.svg" alt="">
-                                        </div>
                                         <div class="testimonial-rating">
-                                            <i class="fa-solid fa-star"></i>
-                                            <i class="fa-solid fa-star"></i>
-                                            <i class="fa-solid fa-star"></i>
-                                            <i class="fa-solid fa-star"></i>
-                                            <i class="fa-solid fa-star"></i>
+                                            <i v-for="star in Number(item.rating || 5)" :key="`star-${item.id || item.author_name}-${star}`" class="fa-solid fa-star"></i>
                                         </div>                                        
                                         <div class="testimonial-content">
-                                            <p>The team transformed our brand's online presence with creativity and precision. The results exceeded our expectations! Their digital marketing strategies helped us reach a broader audience and significantly boosted our sales.</p>								
+                                            <p>{{ item.quote || item.description }}</p>
                                         </div>
                                         <div class="testimonial-body">
                                             <div class="author-image">
                                                 <figure class="image-anime">
-                                                    <img src="https://html.awaikenthemes.com/artistic/images/author-1.jpg" alt="">
+                                                    <img :src="resolveAssetUrl(item.author_image_url || item.image_url)" :alt="item.author_name">
                                                 </figure>
                                             </div>            
                                             <div class="author-content">
-                                                <h3>Sarah Mitchell</h3>
-                                                <p>Marketing Director</p>
+                                                <h3>{{ item.author_name }}</h3>
+                                                <p>{{ item.author_role }}</p>
                                             </div>
                                         </div>                                    
                                     </div>
                                 </div>
-                                <!-- Testimonial Slide End -->
-
-                                <!-- Testimonial Slide Start -->
-                                <div class="swiper-slide">
-                                    <div class="testimonial-item">
-                                        <div class="testimonial-company-logo">
-                                            <img src="https://html.awaikenthemes.com/artistic/images/icon-testimonial-logo.svg" alt="">
-                                        </div>
-                                        <div class="testimonial-rating">
-                                            <i class="fa-solid fa-star"></i>
-                                            <i class="fa-solid fa-star"></i>
-                                            <i class="fa-solid fa-star"></i>
-                                            <i class="fa-solid fa-star"></i>
-                                            <i class="fa-solid fa-star"></i>
-                                        </div>                                        
-                                        <div class="testimonial-content">
-                                            <p>The team transformed our brand's online presence with creativity and precision. The results exceeded our expectations! Their digital marketing strategies helped us reach a broader audience and significantly boosted our sales.</p>								
-                                        </div>
-                                        <div class="testimonial-body">
-                                            <div class="author-image">
-                                                <figure class="image-anime">
-                                                    <img src="https://html.awaikenthemes.com/artistic/images/author-2.jpg" alt="">
-                                                </figure>
-                                            </div>            
-                                            <div class="author-content">
-                                                <h3>Sarah Mitchell</h3>
-                                                <p>Marketing Director</p>
-                                            </div>
-                                        </div>                                    
-                                    </div>
-                                </div>
-                                <!-- Testimonial Slide End -->
                             </div>
                             <div class="testimonial-btn">
                                 <div class="testimonial-button-prev"></div>
@@ -1211,65 +1068,17 @@
                 <div class="col-lg-12">
                     <!-- Testimonial Benefits Box Start -->
                     <div class="testimonial-benefits-box">
-                        <!-- Testimonial Benefits Item Start -->
-                        <div class="testimonial-benefits-item wow fadeInUp">
+                        <div v-for="(item, index) in testimonialBenefits" :key="`testimonial-benefit-${index}`" class="testimonial-benefits-item wow fadeInUp" :data-wow-delay="index ? `${index * 0.2}s` : null">
                             <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-testimonial-benefits-1.svg" alt="">
+                                <img :src="resolveAssetUrl(item.icon_url)" :alt="item.title">
                             </div>
                             <div class="testimonial-benefits-content">
-                                <h3>Low Cost</h3>
+                                <h3>{{ item.title }}</h3>
                                 <ul>
-                                    <li>Competitive fee</li>
-                                    <li>Flexible rates</li>
+                                    <li v-for="(point, pointIndex) in item.points" :key="`testimonial-benefit-point-${index}-${pointIndex}`">{{ point }}</li>
                                 </ul>
                             </div>
                         </div>
-                        <!-- Testimonial Benefits Item End -->
-
-                        <!-- Testimonial Benefits Item Start -->
-                        <div class="testimonial-benefits-item wow fadeInUp" data-wow-delay="0.2s">
-                            <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-testimonial-benefits-2.svg" alt="">
-                            </div>
-                            <div class="testimonial-benefits-content">
-                                <h3>Permission Less</h3>
-                                <ul>
-                                    <li>Open for integration</li>
-                                    <li>Run your own nodes</li>
-                                </ul>
-                            </div>
-                        </div>
-                        <!-- Testimonial Benefits Item End -->
-
-                        <!-- Testimonial Benefits Item Start -->
-                        <div class="testimonial-benefits-item wow fadeInUp" data-wow-delay="0.4s">
-                            <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-testimonial-benefits-3.svg" alt="">
-                            </div>
-                            <div class="testimonial-benefits-content">
-                                <h3>Secure Data</h3>
-                                <ul>
-                                    <li>Open source sheet</li>
-                                    <li>360 Security</li>
-                                </ul>
-                            </div>
-                        </div>
-                        <!-- Testimonial Benefits Item End -->
-
-                        <!-- Testimonial Benefits Item Start -->
-                        <div class="testimonial-benefits-item wow fadeInUp" data-wow-delay="0.6s">
-                            <div class="icon-box">
-                                <img src="https://html.awaikenthemes.com/artistic/images/icon-testimonial-benefits-4.svg" alt="">
-                            </div>
-                            <div class="testimonial-benefits-content">
-                                <h3>24 X 7 Support</h3>
-                                <ul>
-                                    <li>Toll free number</li>
-                                    <li>Ticket systems</li>
-                                </ul>
-                            </div>
-                        </div>
-                        <!-- Testimonial Benefits Item End -->
                     </div>
                     <!-- Testimonial Benefits Box End -->
                 </div>
@@ -1277,234 +1086,6 @@
         </div>
     </div>
     <!-- Our Testimonial Section End -->
-
-    <!-- Agency Benefits Section Start -->
-    <div class="agency-benefits">
-        <div class="container">
-            <div class="row section-row align-items-center">
-                <div class="col-lg-7">
-                    <!-- Section Title Start -->
-                    <div class="section-title">
-                        <h3 class="wow fadeInUp">key benefits</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Discover the <span>benefits</span> of choosing us today</h2>
-                    </div>
-                    <!-- Section Title End -->
-                </div>
-
-                <div class="col-lg-5">
-                    <!-- Section Title Content Start -->
-                    <div class="section-title-content wow fadeInUp" data-wow-delay="0.25s">
-                        <p>Experience unparalleled creativity, data-driven strategies, and dedicated support that drive real results for your brand.</p>
-                    </div>
-                    <!-- Section Title Content End -->          
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-lg-3 col-md-6">
-                    <!-- Benefits Steps Item Start -->
-                    <div class="benefits-steps-item wow fadeInUp">
-                        <div class="benefits-steps-no">
-                            <h3>01</h3>
-                        </div>
-
-                        <div class="icon-box">
-                            <img src="https://html.awaikenthemes.com/artistic/images/icon-benefits-steps-1.svg" alt="">
-                        </div>
-
-                        <div class="benefits-steps-content">
-                            <h3>Personalized Approach</h3>
-                            <p>We customize strategies to fit your brand's specific needs, ensuring alignment.</p>
-                        </div>
-                    </div>
-                    <!-- Benefits Steps Item End -->
-                </div>
-
-                <div class="col-lg-3 col-md-6">
-                    <!-- Benefits Steps Item Start -->
-                    <div class="benefits-steps-item wow fadeInUp" data-wow-delay="0.2s">
-                        <div class="benefits-steps-no">
-                            <h3>02</h3>
-                        </div>
-
-                        <div class="icon-box">
-                            <img src="https://html.awaikenthemes.com/artistic/images/icon-benefits-steps-2.svg" alt="">
-                        </div>
-
-                        <div class="benefits-steps-content">
-                            <h3>experienced team</h3>
-                            <p>Combines industry knowledge and creativity to exceptional results for your brand.</p>
-                        </div>
-                    </div>
-                    <!-- Benefits Steps Item End -->
-                </div>
-
-                <div class="col-lg-3 col-md-6">
-                    <!-- Benefits Steps Item Start -->
-                    <div class="benefits-steps-item wow fadeInUp" data-wow-delay="0.4s">
-                        <div class="benefits-steps-no">
-                            <h3>03</h3>
-                        </div>
-
-                        <div class="icon-box">
-                            <img src="https://html.awaikenthemes.com/artistic/images/icon-benefits-steps-1.svg" alt="">
-                        </div>
-
-                        <div class="benefits-steps-content">
-                            <h3>data-driven decisions</h3>
-                            <p>We utilize data insights to refine strategies, optimize and ensure impactful, measurable results.</p>
-                        </div>
-                    </div>
-                    <!-- Benefits Steps Item End -->
-                </div>
-
-                <div class="col-lg-3 col-md-6">
-                    <!-- Benefits Steps Item Start -->
-                    <div class="benefits-steps-item wow fadeInUp" data-wow-delay="0.6s">
-                        <div class="benefits-steps-no">
-                            <h3>04</h3>
-                        </div>
-
-                        <div class="icon-box">
-                            <img src="https://html.awaikenthemes.com/artistic/images/icon-benefits-steps-4.svg" alt="">
-                        </div>
-
-                        <div class="benefits-steps-content">
-                            <h3>ongoing support</h3>
-                            <p>We provide continuous support and maintenance to keep your digital assets at their best.</p>
-                        </div>
-                    </div>
-                    <!-- Benefits Steps Item End -->
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- Agency Benefits Section End -->
-
-    <!-- Our Blog Section Start -->
-    <div class="our-blog">
-        <div class="container">
-            <div class="row section-row align-items-center">
-                <div class="col-lg-7">
-                    <!-- Section Title Start -->
-                    <div class="section-title">
-                        <h3 class="wow fadeInUp">latest news</h3>
-                        <h2 class="text-anime-style-2" data-cursor="-opaque">Insights on digital <span>innovation</span> and growth</h2>
-                    </div>
-                    <!-- Section Title End -->
-                </div>
-
-                <div class="col-lg-5">
-                    <!-- Section Title Content Start -->
-                    <div class="section-title-content wow fadeInUp" data-wow-delay="0.25s">
-                        <p>Explore the latest trends, strategies, and tools driving digital innovation and helping businesses thrive in a rapidly evolving digital landscape.</p>
-                    </div>
-                    <!-- Section Title Content End -->          
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-lg-4 col-md-6">
-                    <!-- Post Item Start -->
-                    <div class="post-item wow fadeInUp">
-                        <!-- Post Featured Image Start-->
-                        <div class="post-featured-image">
-                            <figure>
-                                <a href="blog-single.html" class="image-anime" data-cursor-text="View">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/post-1.jpg" alt="">
-                                </a>
-                            </figure>
-                        </div>
-                        <!-- Post Featured Image End -->
-
-                        <!-- Post Item Body Start -->
-                        <div class="post-item-body">
-                            <!-- Post Item Content Start -->
-                            <div class="post-item-content">
-                                <h3><a href="blog-single.html">UI/UX Design Principles for Better User Engagement</a></h3>
-                            </div>
-                            <!-- Post Item Content End -->
-
-                            <!-- Post Item Readmore Button Start-->
-                            <div class="post-item-btn">
-                                <a href="blog-single.html">read more</a>
-                            </div>
-                            <!-- Post Item Readmore Button End-->
-                        </div>
-                        <!-- Post Item Body End -->
-                    </div>
-                    <!-- Post Item End -->
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <!-- Post Item Start -->
-                    <div class="post-item wow fadeInUp" data-wow-delay="0.2s">
-                        <!-- Post Featured Image Start-->
-                        <div class="post-featured-image">
-                            <figure>
-                                <a href="blog-single.html" class="image-anime" data-cursor-text="View">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/post-2.jpg" alt="">
-                                </a>
-                            </figure>
-                        </div>
-                        <!-- Post Featured Image End -->
-
-                        <!-- Post Item Body Start -->
-                        <div class="post-item-body">
-                            <!-- Post Item Content Start -->
-                            <div class="post-item-content">
-                                <h3><a href="blog-single.html">Why Your Business Needs a Mobile-Optimized Website</a></h3>
-                            </div>
-                            <!-- Post Item Content End -->
-
-                            <!-- Post Item Readmore Button Start-->
-                            <div class="post-item-btn">
-                                <a href="blog-single.html">read more</a>
-                            </div>
-                            <!-- Post Item Readmore Button End-->
-                        </div>
-                        <!-- Post Item Body End -->
-                    </div>
-                    <!-- Post Item End -->
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <!-- Post Item Start -->
-                    <div class="post-item wow fadeInUp" data-wow-delay="0.4s">
-                        <!-- Post Featured Image Start-->
-                        <div class="post-featured-image">
-                            <figure>
-                                <a href="blog-single.html" class="image-anime" data-cursor-text="View">
-                                    <img src="https://html.awaikenthemes.com/artistic/images/post-3.jpg" alt="">
-                                </a>
-                            </figure>
-                        </div>
-                        <!-- Post Featured Image End -->
-
-                        <!-- Post Item Body Start -->
-                        <div class="post-item-body">
-                            <!-- Post Item Content Start -->
-                            <div class="post-item-content">
-                                <h3><a href="blog-single.html">Content Marketing Essentials for Growing Your Brand</a></h3>
-                            </div>
-                            <!-- Post Item Content End -->
-
-                            <!-- Post Item Readmore Button Start-->
-                            <div class="post-item-btn">
-                                <a href="blog-single.html">read more</a>
-                            </div>
-                            <!-- Post Item Readmore Button End-->
-                        </div>
-                        <!-- Post Item Body End -->
-                    </div>
-                    <!-- Post Item End -->
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- Our Blog Section End -->
-
-
 
 </template>
 
